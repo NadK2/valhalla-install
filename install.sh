@@ -104,7 +104,8 @@ cat > "$BASE/valhalla.json" <<EOF
       "radius": 0,
       "search_cutoff": 35000,
       "street_side_max_distance": 1000,
-      "street_side_tolerance": 5
+      "street_side_tolerance": 5,
+      "min_zoom_road_class": [7, 7, 8, 10, 11, 11, 13, 14]
     },
     "use_connectivity": true
   },
@@ -165,7 +166,7 @@ cat > "$BASE/valhalla.json" <<EOF
   },
   "mjolnir": {
     "admin": "/data/valhalla/admins.sqlite",
-    "concurrency": 8,
+    "concurrency": 4,
     "data_processing": {
       "allow_alt_name": false,
       "apply_country_overrides": true,
@@ -204,7 +205,7 @@ cat > "$BASE/valhalla.json" <<EOF
     "timezone": "/data/valhalla/timezones.sqlite",
     "traffic_extract": "/data/valhalla/traffic.tar",
     "transit_dir": "/data/valhalla/transit_tiles",
-    "transit_feeds_dir": "/gtfs_feeds",
+    "transit_feeds_dir": "/data/valhalla/gtfs_feeds",
     "transit_pbf_limit": 20000,
     "use_lru_mem_cache": false,
     "use_simple_mem_cache": false
@@ -435,12 +436,17 @@ OSM="$BASE/osm"
 OSM_FILE="$OSM/great-britain-latest.osm.pbf"
 DATE=$(date +%Y_%m_%d_%H%M)
 NEW_TILES="$TILES/tiles_$DATE"
+NEW_TILE_TAR="$BASE/tiles_$DATE.tar"
 IMG="ghcr.io/valhalla/valhalla:latest"
 
-REMOTE_SHA=$(curl -s https://download.geofabrik.de/europe/great-britain-latest.osm.pbf.sha256)
-LOCAL_SHA=$(sha256sum "$OSM_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+REMOTE_MD5=$(curl -s https://download.geofabrik.de/europe/great-britain-latest.osm.pbf.md5 | awk '{print $1}')
+echo "Remote osm md5: $REMOTE_MD5"
 
-if [ "$REMOTE_SHA" = "$LOCAL_SHA" ]; then
+# Local MD5 of your downloaded file
+LOCAL_MD5=$(md5sum "$OSM_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+echo "Local osm md5: $LOCAL_MD5"
+
+if [ "$REMOTE_MD5" = "$LOCAL_MD5" ]; then
   echo "▶ OSM unchanged, skipping rebuild"
   exit 0
 fi
@@ -455,8 +461,13 @@ mkdir -p "$NEW_TILES"
 # -------------------------------------------------
 TMP_CONFIG="$BASE/valhalla.build.json"
 
-jq --arg dir "/data/valhalla/tiles/$(basename "$NEW_TILES")" \
-  '.mjolnir.tile_dir = $dir' \
+jq \
+  --arg dir "/data/valhalla/tiles/$(basename "$NEW_TILES")" \
+  --arg extract "/data/valhalla/$(basename "$NEW_TILE_TAR")" \
+  '
+  .mjolnir.tile_dir = $dir
+  | .mjolnir.tile_extract = $extract
+  ' \
   "$BASE/valhalla.json" > "$TMP_CONFIG"
 
 docker pull "$IMG" > /dev/null
@@ -480,13 +491,16 @@ docker run --rm \
 # Atomic symlink swap
 # -------------------------------------------------
 ln -sfn "$(basename "$NEW_TILES")" "$TILES/current"
+ln -sfn "$(basename "$NEW_TILE_TAR")" "$BASE/tiles.tar"
 
 # Restart service (milliseconds)
 cd "$BASE"
+
 docker compose restart valhalla
 
 # Cleanup
 ls -dt "$TILES"/tiles_* | tail -n +3 | xargs -r rm -rf
+ls -dt "$BASE"/tiles_* | tail -n +3 | xargs -r rm -rf
 
 rm -f "$TMP_CONFIG"
 
