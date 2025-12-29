@@ -63,6 +63,7 @@ cat > "$BASE/valhalla.json" <<EOF
 {
   "mjolnir": {
     "tile_dir": "/data/valhalla/tiles/current",
+    "tile_extract": "/data/valhalla/tiles.tar",
     "concurrency": 4
   },
   "loki": { "use_connectivity": true },
