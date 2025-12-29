@@ -49,7 +49,7 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - ./valhalla:/data/valhalla
+      - ./:/data/valhalla
       - ./valhalla.json:/valhalla.json
     command: valhalla_service /valhalla.json
     restart: unless-stopped
