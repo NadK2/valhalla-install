@@ -499,8 +499,10 @@ cd "$BASE"
 docker compose restart valhalla
 
 # Cleanup
-ls -dt "$TILES"/tiles_* | tail -n +3 | xargs -r rm -rf
-ls -dt "$BASE"/tiles_* | tail -n +3 | xargs -r rm -rf
+#ls -dt "$TILES"/tiles_* | tail -n +3 | xargs -r rm -rf
+#ls -dt "$BASE"/tiles_* | tail -n +3 | xargs -r rm -rf
+ls -dt "$TILES"/tiles_* | sed '1,2d' | xargs -r rm -rf
+ls -dt "$BASE"/tiles_* | sed '1,2d' | xargs -r rm -rf
 
 rm -f "$TMP_CONFIG"
 
